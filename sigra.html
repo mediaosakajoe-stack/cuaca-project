@@ -1,1 +1,214 @@
+<!doctype html>
 
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SIGRA Lite — Media Pembelajaran Cuaca & Prediksi</title>  <!-- Leaflet CSS -->  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root{--bg:#f7fafc;--card:#ffffff;--muted:#6b7280;--accent:#06b6d4;--radius:14px}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto; background: linear-gradient(135deg,#6EE7B7,#3B82F6,#A78BFA); background-size: 300% 300%; animation:bgMove 12s ease infinite; color:#0f172a}
+    .wrap{max-width:1100px;margin:24px auto;padding:16px}
+    header{display:flex;gap:12px;align-items:center}
+    .logo{width:56px;height:56px;border-radius:12px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:white;font-weight:700}
+    h1{margin:0;font-size:20px}
+    p.lead{margin:0;color:var(--muted);font-size:13px}.grid{display:grid;grid-template-columns:1fr;gap:14px;margin-top:18px;width:100%}
+@media(min-width:960px){.grid{grid-template-columns:360px 1fr}}
+
+.card{background:var(--card);padding:14px;border-radius:12px;box-shadow:0 8px 24px rgba(2,6,23,0.06)}
+.btn{background:var(--accent);color:#fff;padding:8px 12px;border-radius:10px;border:0;cursor:pointer}
+input{padding:8px;border-radius:8px;border:1px solid #e6eef2;width:100%}
+.muted{color:var(--muted)}
+
+#map{height:60vh;min-height:300px;width:100%;border-radius:10px}
+.forecast-chart{height:220px}
+.lesson{line-height:1.6}
+.small{font-size:13px;color:var(--muted)}
+
+footer{text-align:center;margin-top:18px;color:var(--muted);font-size:13px}
+
+@keyframes bgMove{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}} </style>
+
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">S</div>
+      <div>
+        <h1>SIGRA Lite</h1>
+        <p class="lead">Media pembelajaran cuaca + prediksi singkat (tanpa API key)</p>
+      </div>
+    </header><div class="grid">
+  <!-- Left column: controls + lessons -->
+  <div>
+    <div class="card">
+      <h3>Pilih Lokasi</h3>
+      <p class="small">Gunakan tombol untuk mendeteksi lokasimu atau masukkan koordinat manual.</p>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn" id="btn-locate">Gunakan Lokasi Saya</button>
+        <button class="btn" id="btn-refresh">Refresh</button>
+      </div>
+
+      <div style="margin-top:12px;display:grid;gap:8px">
+        <label class="small">Latitude</label>
+        <input id="lat" placeholder="-7.558" />
+        <label class="small">Longitude</label>
+        <input id="lon" placeholder="112.233" />
+        <button class="btn" id="btn-load" style="margin-top:6px">Tampilkan Prediksi</button>
+      </div>
+
+      <hr style="margin:12px 0;border:none;border-top:1px solid #eef2f6">
+
+      <h4>Belajar Cepat: Apa itu cuaca?</h4>
+      <div class="lesson small">
+        <p><strong>Cuaca</strong> adalah kondisi atmosfer di waktu dan tempat tertentu (suhu, awan, hujan, angin).</p>
+        <p><strong>Prediksi cuaca</strong> dibuat dari model numerik yang memproses data pengamatan (satelit, radar, stasiun).</p>
+        <p><strong>Yang bisa diprediksi mudah:</strong> suhu, hujan ringkas 1-7 hari. Prediksi jarak jauh lebih tidak pasti.</p>
+      </div>
+
+      <hr style="margin:12px 0;border:none;border-top:1px solid #eef2f6">
+      <h4>Tips Sederhana</h4>
+      <ul class="small">
+        <li>Periksa prakiraan 3 hari sebelum beraktivitas di luar.</li>
+        <li>Bawa payung bila kemungkinan hujan > 40%.</li>
+        <li>Perhatikan peringatan cuaca ekstrem dari BMKG.</li>
+      </ul>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h4>Ringkasan Prediksi</h4>
+      <div id="summary" class="small">Tekan <em>Tampilkan Prediksi</em> untuk mulai.</div>
+    </div>
+  </div>
+
+  <!-- Right column: map + charts -->
+  <div>
+    <div class="card" id="card-map">
+      <h3>Peta & Posisi</h3>
+      <div id="map"></div>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+        <div class="small muted">Koordinat:</div>
+        <div id="coords" class="small">- , -</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h3>Grafik Prediksi 3 Hari</h3>
+      <canvas id="chart" class="forecast-chart" style="width:100%;height:260px"></canvas>
+      <div class="small muted" style="margin-top:8px">Sumber data: Open‑Meteo (tanpa API key)</div>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <h3>Detail Harian</h3>
+      <div id="daily" class="small">Belum ada data.</div>
+    </div>
+  </div>
+</div>
+
+<footer>Oleh Arta dan Robi — SMAN Kabuh || 2025</footer>
+
+  </div>  <!-- Leaflet JS -->  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>  <!-- Chart.js -->  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>  <script>
+    // --- util
+    function el(id){ return document.getElementById(id) }
+    function setText(id, t){ el(id).innerText = t }
+
+    // --- map init
+    const map = L.map('map', { center: [-7.558,112.233], zoom: 6 });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
+    let userMarker = null;
+
+    function setUserMarker(lat, lon){
+      if(userMarker) map.removeLayer(userMarker);
+      userMarker = L.marker([lat, lon]).addTo(map).bindPopup('Lokasi yang dipilih').openPopup();
+      map.setView([lat, lon], 7);
+      el('coords').innerText = lat.toFixed(4) + ' , ' + lon.toFixed(4);
+    }
+
+    // --- chart init
+    const ctx = document.getElementById('chart').getContext('2d');
+    let myChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels: [], datasets: [{ label: 'Suhu (°C)', data: [], tension:0.3, fill:true }] },
+      options: { responsive:true, plugins:{legend:{display:false}} }
+    });
+
+    // --- fetch forecast from Open-Meteo (no API key)
+    async function fetchForecast(lat, lon){
+      // Open-Meteo URL: hourly temperature + precipitation & daily min/max + timezone
+      const url = https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=Asia%2FJakarta;
+      const r = await fetch(url);
+      if(!r.ok) throw new Error('Gagal ambil data prediksi');
+      return await r.json();
+    }
+
+    function summarizeDaily(daily){
+      const lines = [];
+      for(let i=0;i<daily.time.length && i<3;i++){
+        const day = daily.time[i];
+        const tmax = daily.temperature_2m_max[i];
+        const tmin = daily.temperature_2m_min[i];
+        const rain = daily.precipitation_sum[i];
+        lines.push(<b>${day}</b>: ${tmin}°C - ${tmax}°C, curah hujan: ${rain} mm);
+      }
+      return lines.join('<br>');
+    }
+
+    async function loadAndRender(lat, lon){
+      try{
+        setText('summary','Mengambil data prediksi...');
+        const data = await fetchForecast(lat, lon);
+
+        // update chart: gunakan 3 hari data hourly (72 jam)
+        const hours = data.hourly.time.slice(0,72).map(t => t.replace('T',' '));
+        const temps = data.hourly.temperature_2m.slice(0,72);
+        myChart.data.labels = hours;
+        myChart.data.datasets[0].data = temps;
+        myChart.update();
+
+        // update daily
+        el('daily').innerHTML = summarizeDaily(data.daily);
+
+        // update summary: simple rule prediction
+        const nextDayMax = data.daily.temperature_2m_max[0];
+        const nextDayRain = data.daily.precipitation_sum[0];
+        setText('summary', Besok diperkirakan suhu maksimum ${nextDayMax}°C. Perkiraan curah hujan: ${nextDayRain} mm.);
+
+      }catch(err){
+        setText('summary','Gagal mengambil prediksi.');
+        el('daily').innerText = 'Gagal ambil data.';
+        console.error(err);
+      }
+    }
+
+    // --- events
+    el('btn-locate').addEventListener('click', ()=>{
+      if(!navigator.geolocation){ alert('Geolocation tidak didukung'); return; }
+      navigator.geolocation.getCurrentPosition(pos=>{
+        const lat = pos.coords.latitude; const lon = pos.coords.longitude;
+        el('lat').value = lat; el('lon').value = lon;
+        setUserMarker(lat, lon);
+        loadAndRender(lat, lon);
+      }, err=>{ alert('Gagal ambil lokasi: ' + err.message) });
+    });
+
+    el('btn-load').addEventListener('click', ()=>{
+      const lat = parseFloat(el('lat').value || '0');
+      const lon = parseFloat(el('lon').value || '0');
+      if(isNaN(lat) || isNaN(lon)){ alert('Isi koordinat yang valid'); return; }
+      setUserMarker(lat, lon);
+      loadAndRender(lat, lon);
+    });
+
+    el('btn-refresh').addEventListener('click', ()=>{
+      const lat = parseFloat(el('lat').value || '0');
+      const lon = parseFloat(el('lon').value || '0');
+      if(isNaN(lat) || isNaN(lon)){ showToast('Isi koordinat atau gunakan lokasi'); return; }
+      loadAndRender(lat, lon);
+    });
+
+    function showToast(t){ alert(t); }
+
+    // initial: set default coords (Jombang area)
+    el('lat').value = -7.558; el('lon').value = 112.233; setUserMarker(-7.558,112.233);
+  </script></body>
+</html>
